@@ -1,0 +1,104 @@
+name: Build Desktop App (.exe)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared libraries
+        run: pnpm run typecheck:libs
+
+      - name: Build React frontend (Electron mode)
+        working-directory: artifacts/school-manager
+        run: npx vite build --config vite.electron.config.ts
+
+      - name: Install Electron dependencies
+        working-directory: artifacts/school-manager
+        run: |
+          pnpm add -D electron@latest electron-builder@latest
+          pnpm add better-sqlite3 express cors
+
+      - name: Rebuild native modules for Electron
+        working-directory: artifacts/school-manager
+        run: npx electron-builder install-app-deps
+
+      - name: Build Windows portable .exe
+        working-directory: artifacts/school-manager
+        run: npx electron-builder --win portable --config electron-builder.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload .exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SchoolManagerPro-Windows
+          path: artifacts/school-manager/dist-electron/*.exe
+          retention-days: 30
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared libraries
+        run: pnpm run typecheck:libs
+
+      - name: Build React frontend (Electron mode)
+        working-directory: artifacts/school-manager
+        run: npx vite build --config vite.electron.config.ts
+
+      - name: Install Electron dependencies
+        working-directory: artifacts/school-manager
+        run: |
+          pnpm add -D electron@latest electron-builder@latest
+          pnpm add better-sqlite3 express cors
+
+      - name: Rebuild native modules for Electron
+        working-directory: artifacts/school-manager
+        run: npx electron-builder install-app-deps
+
+      - name: Build Linux AppImage
+        working-directory: artifacts/school-manager
+        run: npx electron-builder --linux AppImage --config electron-builder.json
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SchoolManagerPro-Linux
+          path: artifacts/school-manager/dist-electron/*.AppImage
+          retention-days: 30
